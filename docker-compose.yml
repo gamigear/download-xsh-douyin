@@ -1,0 +1,52 @@
+services:
+  xhs-runtime:
+    build:
+      context: ../vendor/XHS-Downloader
+      dockerfile: Dockerfile
+    command: ["python", "main.py", "API"]
+    container_name: standalone-xhs-runtime
+    restart: unless-stopped
+    ports:
+      - "5556:5556"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5556/openapi.json', timeout=10)\""]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+
+  gamigear-bot:
+    build:
+      context: .
+    container_name: standalone-gamigear-bot
+    restart: unless-stopped
+    depends_on:
+      xhs-runtime:
+        condition: service_healthy
+    env_file:
+      - ./env/gamigear.env
+    command: ["python", "/app/app/combined_poller.py"]
+    volumes:
+      - ./data/douyin-fetch-jobs:/data/douyin-fetch-jobs
+      - ./data/douyin-runtime:/data/douyin-runtime
+      - ./data/xhs-fetch-jobs:/data/xhs-fetch-jobs
+      - ./data/xhs-runtime:/data/xhs-runtime
+      - ./data/gamigear-runtime:/data/gamigear-runtime
+
+  quangia-bot:
+    build:
+      context: .
+    container_name: standalone-quangia-bot
+    restart: unless-stopped
+    depends_on:
+      xhs-runtime:
+        condition: service_healthy
+    env_file:
+      - ./env/quangia.env
+    command: ["python", "/app/app/combined_poller.py"]
+    volumes:
+      - ./data/douyin-fetch-jobs:/data/douyin-fetch-jobs
+      - ./data/douyin-runtime:/data/douyin-runtime
+      - ./data/xhs-fetch-jobs:/data/xhs-fetch-jobs
+      - ./data/xhs-runtime:/data/xhs-runtime
+      - ./data/quangia-runtime:/data/quangia-runtime

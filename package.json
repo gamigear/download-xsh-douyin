@@ -1,0 +1,7 @@
+{
+  "name": "download-bots-standalone",
+  "private": true,
+  "dependencies": {
+    "playwright-core": "1.51.1"
+  }
+}
