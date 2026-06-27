@@ -29,9 +29,14 @@ services:
     volumes:
       - ./data/douyin-fetch-jobs:/data/douyin-fetch-jobs
       - ./data/douyin-runtime:/data/douyin-runtime
+      - ./data/public-downloads:/data/public-downloads
       - ./data/xhs-fetch-jobs:/data/xhs-fetch-jobs
       - ./data/xhs-runtime:/data/xhs-runtime
       - ./data/gamigear-runtime:/data/gamigear-runtime
+      # Post media của Gami (input/output cho vietsub & translate). Trùng SOURCE_MEDIA_ROOT mặc định.
+      - ./data/gami-post-media:/data/gami-post-media
+      # Cache model faster-whisper (HF_HOME) -> không tải lại mỗi lần recreate.
+      - ./data/whisper-cache:/data/whisper-cache
 
   quangia-bot:
     build:
@@ -47,6 +52,11 @@ services:
     volumes:
       - ./data/douyin-fetch-jobs:/data/douyin-fetch-jobs
       - ./data/douyin-runtime:/data/douyin-runtime
+      - ./data/public-downloads:/data/public-downloads
       - ./data/xhs-fetch-jobs:/data/xhs-fetch-jobs
       - ./data/xhs-runtime:/data/xhs-runtime
       - ./data/quangia-runtime:/data/quangia-runtime
+      # Post media của Gami (input/output cho vietsub & translate). Trùng SOURCE_MEDIA_ROOT mặc định.
+      - ./data/gami-post-media:/data/gami-post-media
+      # Cache model faster-whisper (HF_HOME) -> không tải lại mỗi lần recreate.
+      - ./data/whisper-cache:/data/whisper-cache

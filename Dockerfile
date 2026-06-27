@@ -1,7 +1,8 @@
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    HF_HOME=/data/whisper-cache
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -14,6 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+# faster-whisper (ASR tiếng Trung cho vietsub). CPU int8; model tải lần đầu vào HF_HOME (mount để cache).
+RUN pip install --no-cache-dir faster-whisper
 
 COPY package.json /app/package.json
 RUN npm install --omit=dev
