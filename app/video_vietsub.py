@@ -71,7 +71,7 @@ def transcribe(input_path: str, model_name: str):
     return out, duration
 
 
-def translate_batch(texts, base_url, api_key, model):
+def translate_batch(texts, base_url, api_key, model, context_hint=""):
     if not texts:
         return []
     if not api_key:
@@ -80,13 +80,36 @@ def translate_batch(texts, base_url, api_key, model):
         return texts
 
     numbered = "\n".join(f"{i+1}. {t}" for i, t in enumerate(texts))
+    hint = context_hint.strip() if context_hint else ""
+    hint_block = (
+        f"\n\nBỐI CẢNH do người dùng cung cấp (ưu tiên dùng để chọn xưng hô cho đúng):\n{hint}"
+        if hint
+        else ""
+    )
+    system = (
+        "Bạn là dịch giả phụ đề phim Trung–Việt chuyên nghiệp. "
+        "Dịch sang tiếng Việt tự nhiên, đúng văn nói, mượt như phụ đề phim chiếu rạp."
+    )
     prompt = (
-        "Dịch các câu phụ đề sau sang tiếng Việt tự nhiên, ngắn gọn, giữ đúng số dòng và thứ tự. "
-        "CHỈ trả về mỗi dòng dạng '<số>. <bản dịch>', không thêm giải thích.\n\n" + numbered
+        "Dưới đây là TOÀN BỘ lời thoại của một video, theo thứ tự thời gian. "
+        "Hãy đọc hết trước để hiểu ngữ cảnh, rồi mới dịch sang tiếng Việt.\n\n"
+        "YÊU CẦU QUAN TRỌNG:\n"
+        "- Tự suy luận quan hệ, GIỚI TÍNH và VAI VẾ (tuổi tác, cấp bậc, thân–sơ) của các nhân vật "
+        "từ toàn bộ hội thoại, rồi chọn ĐẠI TỪ XƯNG HÔ tiếng Việt phù hợp và NHẤT QUÁN xuyên suốt "
+        "(anh/em/chị/ông/bà/cô/chú/cháu/con/tôi/ta/mày/tao/ngài…). "
+        "TUYỆT ĐỐI không dịch máy móc kiểu 你→bạn, 我→tôi cho mọi trường hợp.\n"
+        "- Giữ đúng giọng điệu và sắc thái cảm xúc (trang trọng / suồng sã / mỉa mai / giận dữ…).\n"
+        "- Dịch thoát ý, tự nhiên như người Việt nói, KHÔNG bám từng chữ; "
+        "nhưng phải giữ ĐÚNG số dòng và đúng thứ tự.\n"
+        "- CHỈ trả về mỗi dòng dạng '<số>. <bản dịch>', không thêm bất kỳ giải thích nào."
+        f"{hint_block}\n\nLỜI THOẠI:\n{numbered}"
     )
     body = json.dumps({
         "model": model,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ],
         "temperature": 0.3,
         "stream": False,
     }).encode("utf-8")
@@ -193,6 +216,7 @@ def main():
             os.environ.get("VIETSUB_TRANSLATE_BASE_URL", ""),
             os.environ.get("VIETSUB_TRANSLATE_API_KEY", ""),
             os.environ.get("VIETSUB_TRANSLATE_MODEL", "gpt-4o-mini"),
+            os.environ.get("VIETSUB_CONTEXT_HINT", ""),
         )
         for s, t in zip(segments, vi):
             s["vi"] = t
