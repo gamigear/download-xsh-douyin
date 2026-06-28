@@ -17,7 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # faster-whisper (ASR tiếng Trung cho vietsub). CPU int8; model tải lần đầu vào HF_HOME (mount để cache).
-RUN pip install --no-cache-dir faster-whisper
+# edge-tts + pydub: lồng tiếng (voiceover) tiếng Việt.
+RUN pip install --no-cache-dir faster-whisper edge-tts pydub
 
 COPY package.json /app/package.json
 RUN npm install --omit=dev
