@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 import json
 import mimetypes
+import os
 import sys
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-from common import ensure_dir
+from common import ensure_dir, write_caption_artifacts
 
 API_URL = "http://xhs-runtime:5556/xhs/detail"
 OUT_ROOT = Path("/data/xhs-fetch-jobs")
@@ -19,6 +20,10 @@ def now_ts() -> str:
 
 def api_detail(raw_url: str) -> dict:
     payload = {"url": raw_url, "download": False, "index": [], "skip": False}
+    # XHS yêu cầu cookie đăng nhập để lấy dữ liệu note. Lấy từ env (đặt trong gamigear.env).
+    cookie = os.environ.get("XHS_COOKIE", "").strip()
+    if cookie:
+        payload["cookie"] = cookie
     request = urllib.request.Request(
         API_URL,
         data=json.dumps(payload).encode("utf-8"),
@@ -86,6 +91,7 @@ def fetch(raw_url: str) -> dict:
             "media_type": media_type,
         },
     }
+    write_caption_artifacts(job_dir, result, files)
     (job_dir / "detail_response.json").write_text(json.dumps(detail_resp, ensure_ascii=False, indent=2), encoding="utf-8")
     (job_dir / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     return result
