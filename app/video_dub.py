@@ -21,9 +21,11 @@ Output JSON dòng cuối: { "ok": true, "output": "...", "segments": N, "duratio
 import asyncio
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
+import time
 
 from video_vietsub import transcribe, translate_batch, build_ass
 
@@ -59,8 +61,25 @@ async def _tts(text, voice, out_path):
     await communicate.save(out_path)
 
 
+# Câu có chữ để đọc không? (edge-tts trả rỗng nếu chỉ có dấu câu/ký hiệu -> bỏ qua, coi là im lặng.)
+def has_speakable(text: str) -> bool:
+    return bool(re.search(r"[^\W_]", text or "", flags=re.UNICODE))
+
+
 def synth_segment(text, voice, out_path):
-    asyncio.run(_tts(text, voice, out_path))
+    # edge-tts (free) hay chập chờn "No audio was received" -> thử lại nhiều lần, có nghỉ giữa các lần.
+    last = None
+    for attempt in range(4):
+        try:
+            asyncio.run(_tts(text, voice, out_path))
+            if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+                return
+        except Exception as exc:  # noqa: BLE001
+            last = exc
+        time.sleep(1.5 * (attempt + 1))  # backoff 1.5s, 3s, 4.5s
+    if last:
+        raise last
+    raise RuntimeError("No audio was received")
 
 
 def atempo(src, dst, factor):
@@ -80,7 +99,8 @@ def build_voice_track(segments, voice, total_ms, tmpdir):
 
     for idx, seg in enumerate(segments):
         text = (seg.get("vi") or "").strip()
-        if not text:
+        # Bỏ qua câu rỗng hoặc chỉ có dấu câu/ký hiệu (edge-tts không đọc được -> để im lặng).
+        if not has_speakable(text):
             continue
 
         raw = os.path.join(tmpdir, f"tts_{idx:03d}.mp3")
