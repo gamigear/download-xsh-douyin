@@ -27,7 +27,7 @@ import sys
 import tempfile
 import time
 
-from video_vietsub import transcribe, translate_batch, build_ass
+from video_vietsub import transcribe, translate_batch, build_ass, resolve_context_hint
 
 DEFAULT_VOICE = "vi-VN-HoaiMyNeural"
 MAX_SPEEDUP = 1.3  # chặn atempo để giữ dễ nghe
@@ -209,13 +209,11 @@ def main():
         if not segments:
             fail("no_speech_detected")
 
-        vi = translate_batch(
-            [s["zh"] for s in segments],
-            os.environ.get("VIETSUB_TRANSLATE_BASE_URL", ""),
-            os.environ.get("VIETSUB_TRANSLATE_API_KEY", ""),
-            os.environ.get("VIETSUB_TRANSLATE_MODEL", "gpt-4o-mini"),
-            os.environ.get("VIETSUB_CONTEXT_HINT", ""),
-        )
+        base_url = os.environ.get("VIETSUB_TRANSLATE_BASE_URL", "")
+        api_key = os.environ.get("VIETSUB_TRANSLATE_API_KEY", "")
+        model = os.environ.get("VIETSUB_TRANSLATE_MODEL", "gpt-4o-mini")
+        context_hint = resolve_context_hint(segments, base_url, api_key, model)
+        vi = translate_batch([s["zh"] for s in segments], base_url, api_key, model, context_hint)
         for s, t in zip(segments, vi):
             s["vi"] = t
 

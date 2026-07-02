@@ -155,6 +155,76 @@ def translate_batch(texts, base_url, api_key, model, context_hint=""):
     return result
 
 
+def _chat_content(base_url, api_key, model, messages, temperature=0.2, timeout=120):
+    """Gọi chat/completions -> trả content (xử lý cả SSE lẫn JSON như translate_batch)."""
+    body = json.dumps({"model": model, "messages": messages, "temperature": temperature, "stream": False}).encode("utf-8")
+    req = urllib.request.Request(
+        f"{base_url.rstrip('/')}/chat/completions",
+        data=body,
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        raw = resp.read().decode("utf-8", "ignore")
+
+    if raw.lstrip().startswith("data:"):
+        content = ""
+        for line in raw.split("\n"):
+            line = line.strip()
+            if not line.startswith("data:"):
+                continue
+            payload = line[5:].strip()
+            if not payload or payload == "[DONE]":
+                continue
+            try:
+                chunk = json.loads(payload)
+                ch = (chunk.get("choices") or [{}])[0]
+                content += ch.get("delta", {}).get("content") or ch.get("message", {}).get("content") or ""
+            except Exception:
+                pass
+        return content
+    data = json.loads(raw)
+    return data["choices"][0]["message"]["content"]
+
+
+# Tự nhận biết bối cảnh video từ toàn bộ lời thoại (tiếng Trung) -> mô tả ngắn để chọn xưng hô chuẩn.
+def analyze_context(texts, base_url, api_key, model):
+    if not texts or not api_key:
+        return ""
+    joined = "\n".join(t for t in texts[:120] if t)
+    system = "Bạn là trợ lý phân tích ngữ cảnh hội thoại để dịch/lồng tiếng Trung–Việt."
+    prompt = (
+        "Đọc TOÀN BỘ lời thoại (tiếng Trung) của một video ngắn dưới đây và suy luận bối cảnh. "
+        "Trả lời NGẮN GỌN 1–2 câu tiếng Việt, nêu: số nhân vật, GIỚI TÍNH, quan hệ/VAI VẾ, "
+        "và cách XƯNG HÔ tiếng Việt phù hợp + nhất quán (vd: anh–em, mẹ–con, sếp–nhân viên, ta–ngươi…). "
+        "Chỉ trả về mô tả, không giải thích.\n\nLỜI THOẠI:\n" + joined
+    )
+    try:
+        content = _chat_content(
+            base_url, api_key, model,
+            [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+            temperature=0.2, timeout=90,
+        )
+        return " ".join((content or "").split()).strip()
+    except Exception as exc:  # noqa: BLE001
+        log(f"Bỏ qua auto-context (lỗi): {exc}")
+        return ""
+
+
+# Bối cảnh cuối cùng: ưu tiên hint người dùng; nếu rỗng và bật auto -> tự phân tích.
+def resolve_context_hint(segments, base_url, api_key, model):
+    manual = os.environ.get("VIETSUB_CONTEXT_HINT", "").strip()
+    if manual:
+        return manual
+    if os.environ.get("VIETSUB_AUTO_CONTEXT", "1") != "1":
+        return ""
+    log("Đang tự nhận biết bối cảnh…")
+    hint = analyze_context([s["zh"] for s in segments], base_url, api_key, model)
+    if hint:
+        log(f"Bối cảnh tự nhận: {hint}")
+    return hint
+
+
 def build_ass(segments, ass_path):
     header = (
         "[Script Info]\nScriptType: v4.00+\nPlayResX: 1280\nPlayResY: 720\nWrapStyle: 2\n\n"
@@ -211,13 +281,11 @@ def main():
         if not segments:
             fail("no_speech_detected")
 
-        vi = translate_batch(
-            [s["zh"] for s in segments],
-            os.environ.get("VIETSUB_TRANSLATE_BASE_URL", ""),
-            os.environ.get("VIETSUB_TRANSLATE_API_KEY", ""),
-            os.environ.get("VIETSUB_TRANSLATE_MODEL", "gpt-4o-mini"),
-            os.environ.get("VIETSUB_CONTEXT_HINT", ""),
-        )
+        base_url = os.environ.get("VIETSUB_TRANSLATE_BASE_URL", "")
+        api_key = os.environ.get("VIETSUB_TRANSLATE_API_KEY", "")
+        model = os.environ.get("VIETSUB_TRANSLATE_MODEL", "gpt-4o-mini")
+        context_hint = resolve_context_hint(segments, base_url, api_key, model)
+        vi = translate_batch([s["zh"] for s in segments], base_url, api_key, model, context_hint)
         for s, t in zip(segments, vi):
             s["vi"] = t
 
